@@ -29,6 +29,40 @@ export async function verifyToken(req, res, next) {
   }
 }
 
+app.post("/events", verifyToken, async (req, res) => {
+  try {
+    const { title, description, eventType, thumbnail, location, eventDate } = req.body;
+
+    if (!title || !description || !eventType || !thumbnail || !location || !eventDate) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    const date = new Date(eventDate);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    if (isNaN(date) || date < startOfToday) {
+      return res.status(400).json({ error: "Event date must be today or later" });
+    }
+
+    const result = await db.collection("events").insertOne({
+      title,
+      description,
+      eventType,
+      thumbnail,
+      location,
+      eventDate: date,
+      createdBy: req.user.email,
+      createdAt: new Date(),
+    });
+
+    res.status(201).json({ id: result.insertedId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not create event" });
+  }
+});
+
 const client = new MongoClient(process.env.MONGODB_URI);
 let db;
 
