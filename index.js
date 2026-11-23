@@ -2,7 +2,11 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
-import { jwtVerify } from "jose";
+import { jwtVerify, createRemoteJWKSet } from "jose";
+
+const JWKS = createRemoteJWKSet(
+  new URL("/api/auth/jwks", process.env.CLIENT_URL)
+);
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -21,10 +25,11 @@ export async function verifyToken(req, res, next) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, JWKS);
     req.user = payload;
     next();
-  } catch {
+  } catch (err) {
+    console.error("JWT verify failed:", err.message);
     res.status(401).json({ error: "Invalid token" });
   }
 }
