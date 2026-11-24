@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 
 const JWKS = createRemoteJWKSet(
@@ -14,7 +14,6 @@ const port = process.env.PORT || 5000;
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(express.json());
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
 export async function verifyToken(req, res, next) {
   const header = req.headers.authorization || "";
@@ -97,6 +96,63 @@ app.get("/events", async (req, res) => {
 
 app.get("/", (req, res) => {
   res.send("Social events server is running");
+});
+
+app.get("/events/:id", async (req, res) => {
+  try {
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid event id" });
+    }
+
+    const event = await db.collection("events").findOne({
+      _id: new ObjectId(req.params.id),
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    res.json(event);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not load event" });
+  }
+});
+
+app.post("/events/:id/join", verifyToken, async (req, res) => {
+  try {
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid event id" });
+    }
+
+    const eventId = new ObjectId(req.params.id);
+    const event = await db.collection("events").findOne({ _id: eventId });
+
+    if (!event) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    const joins = db.collection("joins");
+    const alreadyJoined = await joins.findOne({
+      eventId,
+      userEmail: req.user.email,
+    });
+
+    if (alreadyJoined) {
+      return res.status(409).json({ error: "You already joined this event" });
+    }
+
+    await joins.insertOne({
+      eventId,
+      userEmail: req.user.email,
+      joinedAt: new Date(),
+    });
+
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not join event" });
+  }
 });
 
 connectDB()
