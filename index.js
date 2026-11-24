@@ -77,6 +77,24 @@ async function connectDB() {
   console.log("Connected to MongoDB");
 }
 
+app.get("/events", async (req, res) => {
+  try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const events = await db
+      .collection("events")
+      .find({ eventDate: { $gte: startOfToday } })
+      .sort({ eventDate: 1 })
+      .toArray();
+
+    res.json(events);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not load events" });
+  }
+});
+
 app.get("/", (req, res) => {
   res.send("Social events server is running");
 });
